@@ -4,7 +4,8 @@ import jakarta.persistence.EntityNotFoundException;
 import org.sid.serviceapprobationwhatsapp.entities.ApprovalOTP;
 import org.sid.serviceapprobationwhatsapp.entities.ApprovalRequest;
 import org.sid.serviceapprobationwhatsapp.entities.OtpResendMapping;
-import org.sid.serviceapprobationwhatsapp.enums.otpStatut;
+import org.sid.serviceapprobationwhatsapp.enums.otpStatus;
+import org.sid.serviceapprobationwhatsapp.enums.otpStatus;
 import org.sid.serviceapprobationwhatsapp.enums.statut;
 import org.sid.serviceapprobationwhatsapp.repositories.ApprovalOtpRepository;
 import org.sid.serviceapprobationwhatsapp.repositories.ApprovalRequestRepository;
@@ -217,14 +218,14 @@ public class WebhookHandlerServiceImpl implements WebhookHandlerService {
         logger.info("Handling resend button for phone number: {}", phoneNumber);
         try {
             // The existing OTP is retrieved from the database
-            Optional<ApprovalOTP> optionalApprovalOTP = approvalOtpRepository.findTopByRecipientNumberAndStatusOrderByCreatedAtDesc(phoneNumber, otpStatut.PENDING);
+            Optional<ApprovalOTP> optionalApprovalOTP = approvalOtpRepository.findTopByRecipientNumberAndStatusOrderByCreatedAtDesc(phoneNumber, otpStatus.PENDING);
             // If the OTP is found, its status is set to EXPIRED
             if (optionalApprovalOTP.isPresent()) {
                 ApprovalOTP approvalOTP = optionalApprovalOTP.get();
                 ApprovalRequest approvalRequest = approvalOTP.getApprovalRequest();
 
                 // Set the previous OTP to EXPIRED
-                approvalOTP.setStatus(otpStatut.EXPIRED);
+                approvalOTP.setStatus(otpStatus.EXPIRED);
                 approvalOtpRepository.save(approvalOTP);
                 logger.info("OTP successfully set to EXPIRED with phone number: {}", phoneNumber);
 

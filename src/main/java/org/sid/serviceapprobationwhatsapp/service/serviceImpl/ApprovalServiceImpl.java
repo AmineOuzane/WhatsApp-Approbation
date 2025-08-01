@@ -3,7 +3,7 @@ package org.sid.serviceapprobationwhatsapp.service.serviceImpl;
 import jakarta.persistence.EntityNotFoundException;
 import org.sid.serviceapprobationwhatsapp.entities.ApprovalOTP;
 import org.sid.serviceapprobationwhatsapp.entities.ApprovalRequest;
-import org.sid.serviceapprobationwhatsapp.enums.otpStatut;
+import org.sid.serviceapprobationwhatsapp.enums.otpStatus;
 import org.sid.serviceapprobationwhatsapp.enums.statut;
 import org.sid.serviceapprobationwhatsapp.repositories.ApprovalOtpRepository;
 import org.sid.serviceapprobationwhatsapp.repositories.ApprovalRequestRepository;
@@ -63,7 +63,7 @@ public class ApprovalServiceImpl implements ApprovalService {
 
             // Check for a validated OTP
             Optional<ApprovalOTP> existingOtp = approvalOtpRepository
-                    .findTopByRecipientNumberAndStatusOrderByCreatedAtDesc(phoneNumber, otpStatut.PENDING);
+                    .findTopByRecipientNumberAndStatusOrderByCreatedAtDesc(phoneNumber, otpStatus.PENDING);
 
             if (existingOtp.isPresent()) {
                 logger.warn("Pending OTP already exists for phone {}. Not creating a new one.", phoneNumber);
@@ -79,7 +79,7 @@ public class ApprovalServiceImpl implements ApprovalService {
                 ApprovalOTP otp = ApprovalOTP.builder()
                         .approvalRequest(approvalRequest)
                         .recipientNumber(phoneNumber)
-                        .status(otpStatut.PENDING)
+                        .status(otpStatus.PENDING)
                         .createdAt(LocalDateTime.now())
                         .invalidattempts(0)
                         .expiration(LocalDateTime.now().plusMinutes(5)) // Expires in 5 minutes

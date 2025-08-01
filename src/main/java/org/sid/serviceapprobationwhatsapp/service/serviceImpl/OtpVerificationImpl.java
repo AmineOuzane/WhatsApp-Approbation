@@ -3,7 +3,7 @@
     import org.sid.serviceapprobationwhatsapp.entities.ApprovalOTP;
     import org.sid.serviceapprobationwhatsapp.entities.ApprovalRequest;
     import org.sid.serviceapprobationwhatsapp.entities.OtpResendMapping;
-    import org.sid.serviceapprobationwhatsapp.enums.otpStatut;
+    import org.sid.serviceapprobationwhatsapp.enums.otpStatus;
     import org.sid.serviceapprobationwhatsapp.repositories.ApprovalOtpRepository;
     import org.sid.serviceapprobationwhatsapp.service.*;
     import org.sid.serviceapprobationwhatsapp.web.WhatsAppWebhookHandler;
@@ -59,7 +59,7 @@
 
             // Check for a pending OTP attempt
                 Optional<ApprovalOTP> optionalOtpAttempt = approvalOtpRepository
-                    .findTopByRecipientNumberAndStatusOrderByCreatedAtDesc(phoneNumber, otpStatut.PENDING);
+                    .findTopByRecipientNumberAndStatusOrderByCreatedAtDesc(phoneNumber, otpStatus.PENDING);
 
             // not processing empty otp
             if (optionalOtpAttempt.isEmpty()) {
@@ -70,7 +70,7 @@
             ApprovalOTP otpAttempt = optionalOtpAttempt.get();
 
             // Idempotency check: if the OTP attempt status is not PENDING, then it has already been processed.
-            if (otpAttempt.getStatus() != otpStatut.PENDING) {
+            if (otpAttempt.getStatus() != otpStatus.PENDING) {
                 logger.info("OTP attempt {} already processed with status {}", otpAttempt.getApprovalRequest().getId(), otpAttempt.getStatus());
                 return ResponseEntity.ok(Map.of("message", "OTP already processed"));
             }
@@ -94,7 +94,7 @@
 
             // Check expiration BEFORE verifying and set status to EXPIRED if expired
             if (LocalDateTime.now().isAfter(otpAttempt.getExpiration())) {
-                otpAttempt.setStatus(otpStatut.EXPIRED);
+                otpAttempt.setStatus(otpStatus.EXPIRED);
                 approvalOtpRepository.save(otpAttempt);
 
                 // Retrieves the existing OTP resend mapping for the given phone number
@@ -114,7 +114,7 @@
             if (isValid) {
                 // Create a new session for the user after successful OTP verification and set status to APPROVED
                 // SessionService.createSession(phoneNumber);
-                otpAttempt.setStatus(otpStatut.APPROVED);
+                otpAttempt.setStatus(otpStatus.APPROVED);
                 approvalOtpRepository.save(otpAttempt);
                 logger.info("OTP verified successfully for approval ID {}", approvalId);
                 // Send the approval request to the approver after validating the OTP
@@ -133,7 +133,7 @@
 
                 // Maximum attempts exceeded, set status to DENIED and send a message to resend OTP
                 if (otpAttempt.getInvalidattempts() >= 3 ) {
-                    otpAttempt.setStatus(otpStatut.DENIED);
+                    otpAttempt.setStatus(otpStatus.DENIED);
                     approvalOtpRepository.save(otpAttempt);
                     logger.error("Exceeded maximum OTP attempts for approval ID {}", approvalId);
 

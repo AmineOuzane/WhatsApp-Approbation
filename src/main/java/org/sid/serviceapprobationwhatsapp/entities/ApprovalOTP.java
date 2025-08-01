@@ -2,7 +2,8 @@ package org.sid.serviceapprobationwhatsapp.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.sid.serviceapprobationwhatsapp.enums.otpStatut;
+
+import org.sid.serviceapprobationwhatsapp.enums.otpStatus;
 import org.sid.serviceapprobationwhatsapp.enums.statut;
 
 import java.time.LocalDateTime;
@@ -33,7 +34,7 @@ public class ApprovalOTP {
 
     @Column(name = "status", nullable = false)
     @Enumerated(EnumType.STRING)
-    private otpStatut status;
+    private otpStatus status;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

@@ -5,7 +5,7 @@ import com.twilio.exception.ApiException;
 import com.twilio.rest.verify.v2.service.Verification;
 import com.twilio.rest.verify.v2.service.VerificationCheck;
 import jakarta.annotation.PostConstruct;
-import org.sid.serviceapprobationwhatsapp.enums.otpStatut;
+import org.sid.serviceapprobationwhatsapp.enums.otpStatus;
 import org.sid.serviceapprobationwhatsapp.repositories.ApprovalOtpRepository;
 import org.sid.serviceapprobationwhatsapp.service.TwilioService;
 import org.slf4j.Logger;

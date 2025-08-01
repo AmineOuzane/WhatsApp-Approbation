@@ -2,7 +2,7 @@ package org.sid.serviceapprobationwhatsapp.service.serviceImpl;
 
 import org.sid.serviceapprobationwhatsapp.entities.ApprovalOTP;
 import org.sid.serviceapprobationwhatsapp.entities.ApprovalRequest;
-import org.sid.serviceapprobationwhatsapp.enums.otpStatut;
+import org.sid.serviceapprobationwhatsapp.enums.otpStatus;
 import org.sid.serviceapprobationwhatsapp.repositories.ApprovalOtpRepository;
 import org.sid.serviceapprobationwhatsapp.service.OtpService;
 import org.slf4j.Logger;
@@ -62,7 +62,7 @@ public class OtpServiceImpl implements OtpService {
                 .recipientNumber(recipientNumber)
                 .otp(otp)
                 .decision(approvalRequest.getDecision())
-                .status(otpStatut.PENDING)
+                .status(otpStatus.PENDING)
                 .createdAt(LocalDateTime.now(ZoneOffset.UTC))
                 .expiration(expiry)
                 .invalidattempts(0)
@@ -78,14 +78,14 @@ public class OtpServiceImpl implements OtpService {
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS);
 
         // Retrieve the OTP based on the recipient number and status to show the most recent one
-        Optional<ApprovalOTP> approvalOTP = approvalOtpRepository.findTopByRecipientNumberAndStatusOrderByCreatedAtDesc(recipientNumber, otpStatut.PENDING);
+        Optional<ApprovalOTP> approvalOTP = approvalOtpRepository.findTopByRecipientNumberAndStatusOrderByCreatedAtDesc(recipientNumber, otpStatus.PENDING);
 	        if (approvalOTP.isEmpty()) {
             // No OTP found for this recipient number.  This is a NOT_FOUND case.
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("No OTP found for this recipient.");
         }
             ApprovalOTP approvalAttempt = approvalOTP.get();
             // Return an error if the OTP has already been denied to handle it later on processOtpMessage method
-        if (approvalAttempt.getStatus() == otpStatut.DENIED) {
+        if (approvalAttempt.getStatus() == otpStatus.DENIED) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("OTP already denied.");
         }
 
@@ -99,7 +99,7 @@ public class OtpServiceImpl implements OtpService {
 
                 if (approvalAttempt.getInvalidattempts() >= 3) {
 
-                    approvalAttempt.setStatus(otpStatut.DENIED);
+                    approvalAttempt.setStatus(otpStatus.DENIED);
                     approvalOtpRepository.save(approvalAttempt);
                     logger.info("OTP set to DENIED for {}", recipientNumber);
 
@@ -114,7 +114,7 @@ public class OtpServiceImpl implements OtpService {
         }
 
         // OTP is correct, not denied, and not expired.
-        if (approvalAttempt.getExpiration().isAfter(now) && approvalAttempt.getStatus() == otpStatut.PENDING) {
+        if (approvalAttempt.getExpiration().isAfter(now) && approvalAttempt.getStatus() == otpStatus.PENDING) {
             // Valid OTP
             approvalOtpRepository.delete(approvalAttempt); // Delete after successful validation.
             return ResponseEntity.ok("OTP validated successfully.");
