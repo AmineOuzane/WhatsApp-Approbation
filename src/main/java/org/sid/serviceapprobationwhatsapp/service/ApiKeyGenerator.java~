@@ -1,0 +1,5 @@
+package org.sid.serviceapprobationwhatsapp.service;
+
+public interface ApiKeyGenerator {
+    static String generateApiKey();
+}

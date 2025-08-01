@@ -1,0 +1,79 @@
+package org.sid.serviceapprobationwhatsapp.service.serviceImpl;
+
+import org.jetbrains.annotations.NotNull;
+import org.json.JSONObject;
+import org.sid.serviceapprobationwhatsapp.entities.ApprovalRequest;
+import org.sid.serviceapprobationwhatsapp.entities.WebhookNotification;
+import org.sid.serviceapprobationwhatsapp.enums.statut;
+import org.sid.serviceapprobationwhatsapp.repositories.WebhookNotificationRepository;
+import org.sid.serviceapprobationwhatsapp.service.ApiKeyGenerator;
+import org.sid.serviceapprobationwhatsapp.service.WebhookNotificationService;
+import org.sid.serviceapprobationwhatsapp.web.WhatsAppWebhookHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.*;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.Date;
+
+@Service
+public class WebhookNotificationServiceImpl implements WebhookNotificationService {
+
+    private final ApiKeyGenerator apiKeyGenerator;
+    private final RestTemplate restTemplate;
+    private final WebhookNotificationRepository webhookNotificationRepository;
+
+    private static final Logger log = LoggerFactory.getLogger(WhatsAppWebhookHandler.class);
+
+    public WebhookNotificationServiceImpl(WebhookNotificationRepository webhookNotificationRepository,
+                                          RestTemplate restTemplate, ApiKeyGenerator apiKeyGenerator) {
+        this.webhookNotificationRepository = webhookNotificationRepository;
+        this.restTemplate = restTemplate;
+        this.apiKeyGenerator = apiKeyGenerator;
+    }
+
+    private org.springframework.http.@NotNull HttpHeaders createHeaders() {
+
+        org.springframework.http.HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        // Use the same API Key that is used by the exterior system to identify themselves when making requests to our API
+        // This API Key is used to authenticate the webhook notification and ensure it is sent to the correct system
+        String apiKey = apiKeyGenerator.generateApiKey();
+        headers.add("Authorization", "Bearer " + apiKey);
+        return headers;
+    }
+
+    @Override
+    public ResponseEntity<String> sendWebhookNotification(String callbackURL, ApprovalRequest approvalRequest) {
+        try {
+            // Creation de object WebhookNotification
+            WebhookNotification webhookNotification = WebhookNotification.builder()
+                    .approvalRequest(approvalRequest)
+                    .build();
+
+            // Creation de object JSONObject pour envoyer la notification webhook au callbackURL
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("approvalRequestId", approvalRequest.getId());
+            jsonObject.put("status", approvalRequest.getDecision());
+
+            if (!approvalRequest.getDecision().equals(statut.Approuver)) {
+                jsonObject.put("commentaire", approvalRequest.getCommentaire());
+            }
+
+            webhookNotification.setCreatedAt(new Date());
+            jsonObject.put("createdAt", webhookNotification.getCreatedAt());
+
+            webhookNotificationRepository.save(webhookNotification);
+
+            // Envoi de la notification webhook
+            HttpEntity<String> request = new HttpEntity<>(jsonObject.toString(), createHeaders());
+            return restTemplate.postForEntity(approvalRequest.getCallbackUrl(), request, String.class);
+
+        } catch (Exception e) {
+            // Log the error and return an appropriate response
+            log.error("Erreur lors de l'envoi de la notification", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erreur lors de l'envoi de la notification");
+        }
+    }
+}

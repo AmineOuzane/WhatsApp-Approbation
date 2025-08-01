@@ -1,0 +1,15 @@
+[33m30361d9[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m)[m HEAD@{0}: reset: moving to origin/master
+[33m168cf8a[m HEAD@{1}: commit: Add application.properties to .gitignore
+[33mdaf24a7[m HEAD@{2}: commit: maj .gitignore otp sms during click
+[33m05be5d1[m HEAD@{3}: commit: Retire application.properties du suivi pour ne plus exposer les credentials
+[33mcdb5201[m HEAD@{4}: commit: otp message in a normal sms trigger after the action taken on the approval request
+[33m6cb8d40[m HEAD@{5}: pull origin master --rebase (finish): returning to refs/heads/master
+[33m6cb8d40[m HEAD@{6}: pull origin master --rebase (pick): sms otp during click of button
+[33m566fe7c[m HEAD@{7}: pull origin master --rebase (pick): change twilio account and credentials to emsi-edu.ma
+[33m26d2241[m HEAD@{8}: pull origin master --rebase (pick): try otp with normal sms twilio fund expired
+[33m30361d9[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m)[m HEAD@{9}: pull origin master --rebase (start): checkout 30361d97d96f7a76ca3dd95a940c4ccdcee7aeb9
+[33mf7a725e[m HEAD@{10}: commit: sms otp during click of button
+[33m1e6b8ec[m HEAD@{11}: commit: change twilio account and credentials to emsi-edu.ma
+[33mabc096e[m HEAD@{12}: commit: try otp with normal sms twilio fund expired
+[33m8792a77[m HEAD@{13}: commit: Suppression des fichiers de sauvegarde
+[33m8929e37[m HEAD@{14}: commit (initial): ignore applications.properties

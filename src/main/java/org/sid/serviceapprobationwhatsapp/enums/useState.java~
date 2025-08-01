@@ -1,0 +1,8 @@
+package org.sid.serviceapprobationwhatsapp.enums;
+
+public enum useState {
+
+    awaiting_rejection_comment,
+    awaiting_attente_comment,
+    
+}
