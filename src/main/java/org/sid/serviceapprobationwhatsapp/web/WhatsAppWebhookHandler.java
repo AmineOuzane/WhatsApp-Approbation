@@ -4,13 +4,13 @@ package org.sid.serviceapprobationwhatsapp.web;
 import org.sid.serviceapprobationwhatsapp.service.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * This class handles incoming WhatsApp webhook events and processes button clicks and text messages.
@@ -24,6 +24,7 @@ import java.util.*;
 
 
 @RestController
+@RequestMapping("/webhook")
 public class WhatsAppWebhookHandler {
 
     private final WebhookHandlerService handlerService;
@@ -33,63 +34,35 @@ public class WhatsAppWebhookHandler {
         this.handlerService = handlerService;
     }
 
-    /**
-     * Handles incoming webhook events from WhatsApp.
-     * Processes button clicks and text messages.
-     * @param payload The incoming webhook payload.
-     * @return ResponseEntity with a message indicating processing status.
-     */
+    @Value("${VERIFY_TOKEN}")
+    private String webhookVerifyToken;
 
-    @PostMapping("/webhook")
+    @Value("${whatsapp.api.token}")
+    private String whatsappApiToken;
 
-    public ResponseEntity<?> handleWebhook(@RequestBody Map<String, Object> payload) throws IOException {
-        logger.info("Webhook received!");
-        logger.debug("Full payload: {}", payload);
+    @GetMapping
+    public ResponseEntity<String> verifyWebhook(
+            @RequestParam("hub.mode") String mode,
+            @RequestParam("hub.verify_token") String token,
+            @RequestParam("hub.challenge") String challenge) {
 
-        Object entryObj = payload.get("entry");
-        if (entryObj instanceof List) {
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> entries = (List<Map<String, Object>>) entryObj;
-            for (Map<String, Object> entry : entries) {
+        logger.info("Received webhook verification request - mode: {}, token: {}", mode, token);
 
-                Object changesObj = entry.get("changes");
-                if (changesObj instanceof List) {
-                    @SuppressWarnings("unchecked")
-                    List<Map<String, Object>> changes = (List<Map<String, Object>>) changesObj;
-                    for (Map<String, Object> change : changes) {
-
-                        Object valueObj = change.get("value");
-                        if (valueObj instanceof Map) {
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> value = (Map<String, Object>) valueObj;
-
-                            Object messagesObj = value.get("messages");
-                            if (messagesObj instanceof List) {
-                                @SuppressWarnings("unchecked")
-                                List<Map<String, Object>> messages = (List<Map<String, Object>>) messagesObj;
-                                for (Map<String, Object> message : messages) {
-
-                                    String phoneNumber = (String) message.get("from");
-                                    if (phoneNumber != null) {
-                                        phoneNumber = phoneNumber.replaceAll("[^0-9+]", "");
-                                        if (!phoneNumber.startsWith("+")) {
-                                            phoneNumber = "+" + phoneNumber;
-                                        }
-                                    }
-                                    String messageType = (String) message.get("type");
-                                    logger.debug("Message type: {}", messageType);
-                                    if ("button".equals(messageType)) {
-                                        handlerService.handleButtonMessage(message, phoneNumber);
-                                    } else if ("text".equals(messageType)) {
-                                        handlerService.handleTextMessage(message, phoneNumber);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        if ("subscribe".equals(mode) && webhookVerifyToken.equals(token)) {
+            logger.info("Webhook verified successfully");
+            return ResponseEntity.ok(challenge);
         }
-        return ResponseEntity.ok(Collections.singletonMap("message", "Processed"));
+
+        logger.warn("Webhook verification failed - Invalid token or mode");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Verification failed");
     }
-}
+
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Void> handleWebhook(@RequestBody Map<String, Object> payload) {
+        logger.info("Received webhook payload");
+
+        // Process asynchronously to return 200 OK immediately
+        CompletableFuture.runAsync(() -> handlerService.processWebhookPayload(payload));
+
+        return ResponseEntity.ok().build();
+    }}

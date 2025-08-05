@@ -1,10 +1,10 @@
 package org.sid.serviceapprobationwhatsapp.service.serviceImpl;
 
 import jakarta.persistence.EntityNotFoundException;
+import org.sid.serviceapprobationwhatsapp.config.WhatsAppConfig;
 import org.sid.serviceapprobationwhatsapp.entities.ApprovalOTP;
 import org.sid.serviceapprobationwhatsapp.entities.ApprovalRequest;
 import org.sid.serviceapprobationwhatsapp.entities.OtpResendMapping;
-import org.sid.serviceapprobationwhatsapp.enums.otpStatus;
 import org.sid.serviceapprobationwhatsapp.enums.otpStatus;
 import org.sid.serviceapprobationwhatsapp.enums.statut;
 import org.sid.serviceapprobationwhatsapp.repositories.ApprovalOtpRepository;
@@ -17,9 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 
@@ -43,6 +41,7 @@ public class WebhookHandlerServiceImpl implements WebhookHandlerService {
     private final MessageIdMappingService messageIdMappingService;
     private final ApprovalRequestRepository approvalRequestRepository;
     private final InfobipService infobipService;
+    private final WhatsAppConfig whatsAppConfig;
 
     private static final Logger logger = LoggerFactory.getLogger(WebhookHandlerServiceImpl.class);
 
@@ -67,7 +66,7 @@ public class WebhookHandlerServiceImpl implements WebhookHandlerService {
                                      OtpResendMappingService otpResendMappingService,
                                      ApprovalService approvalService,
                                      MessageIdMappingService messageIdMappingService,
-                                     ApprovalRequestRepository approvalRequestRepository, InfobipService infobipService) {
+                                     ApprovalRequestRepository approvalRequestRepository, InfobipService infobipService, WhatsAppConfig whatsAppConfig) {
 
         this.whatsAppService = whatsAppService;
         this.smsService = smsService;
@@ -79,6 +78,102 @@ public class WebhookHandlerServiceImpl implements WebhookHandlerService {
         this.messageIdMappingService = messageIdMappingService;
         this.approvalRequestRepository = approvalRequestRepository;
         this.infobipService = infobipService;
+        this.whatsAppConfig = whatsAppConfig;
+    }
+
+    /**
+     * Processes incoming webhook payloads from WhatsApp.
+     * 1. Checks if the payload is a status update
+     * 2. Extracts and processes messages if present
+     *
+     * @param payload A map containing the webhook payload data from WhatsApp
+     */
+    @Override
+    public void processWebhookPayload(Map<String, Object> payload) {
+        try {
+            logger.debug("Processing webhook payload: {}", payload);
+
+            // 1. Check if this is a status update
+            if (isStatusUpdate(payload)) {
+                handleStatusUpdate(payload);
+                return;
+            }
+
+            // 2. Process messages
+            List<Map<String, Object>> messages = extractMessages(payload);
+            if (messages != null && !messages.isEmpty()) {
+                for (Map<String, Object> message : messages) {
+                    processSingleMessage(message, payload);
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error processing webhook payload", e);
+        }
+    }
+
+    /**
+     * Processes a single message from the webhook payload.
+     * Extracts message details, marks as read, and routes to appropriate handler based on message type.
+     *
+     * @param message The individual message to process from the webhook
+     * @param payload The complete webhook payload for context
+     */
+    @Override
+    public void processSingleMessage(Map<String, Object> message, Map<String, Object> payload) {
+        try {
+            String messageId = (String) message.get("id");
+            String phoneNumber = extractPhoneNumber(message);
+            String messageType = (String) message.get("type");
+
+            // Mark message as read
+            markMessageAsRead(extractPhoneNumberId(payload), messageId);
+
+            // Process based on message type
+            if ("button".equals(messageType)) {
+                handleButtonMessage(message, phoneNumber);
+            } else if ("text".equals(messageType)) {
+                handleTextMessage(message, phoneNumber);
+            } else {
+                logger.debug("Unhandled message type: {}", messageType);
+            }
+        } catch (Exception e) {
+            logger.error("Error processing message", e);
+        }
+    }
+
+    /**
+     * Marks a WhatsApp message as read using the WhatsApp API.
+     * Sends an asynchronous POST request to update the message status.
+     *
+     * @param phoneNumberId The WhatsApp phone number ID that received the message
+     * @param messageId The ID of the message to mark as read
+     */
+    @Override
+    public void markMessageAsRead(String phoneNumberId, String messageId) {
+        if (phoneNumberId == null || messageId == null) {
+            logger.warn("Cannot mark message as read - missing phoneNumberId or messageId");
+            return;
+        }
+
+        try {
+            Map<String, Object> requestBody = Map.of(
+                    "messaging_product", "whatsapp",
+                    "status", "read",
+                    "message_id", messageId
+            );
+
+            whatsAppConfig.webClient().post()
+                    .uri("/{phoneNumberId}/messages", phoneNumberId)
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .toBodilessEntity()
+                    .subscribe(
+                            success -> logger.debug("Marked message {} as read", messageId),
+                            error -> logger.error("Failed to mark message {} as read: {}", messageId, error.getMessage())
+                    );
+        } catch (Exception e) {
+            logger.error("Error in markMessageAsRead", e);
+        }
     }
 
     /**
@@ -441,5 +536,151 @@ public class WebhookHandlerServiceImpl implements WebhookHandlerService {
         } else {
             logger.warn("No original message ID (context.id) found in the text message.");
         }
+    }
+
+
+    // --------------------------- Helper methods ---------------------------
+    /**
+     * Checks if the webhook payload contains a status update.
+     * Examines the payload structure to identify if it contains message status information.
+     *
+     * @param payload The webhook payload to check
+     * @return true if the payload contains status updates, false otherwise
+     */
+    @SuppressWarnings("unchecked")
+    private boolean isStatusUpdate(Map<String, Object> payload) {
+        try {
+            List<Map<String, Object>> entries = (List<Map<String, Object>>) payload.get("entry");
+            if (entries != null && !entries.isEmpty()) {
+                Map<String, Object> entry = entries.get(0);
+                List<Map<String, Object>> changes = (List<Map<String, Object>>) entry.get("changes");
+                if (changes != null && !changes.isEmpty()) {
+                    Map<String, Object> value = (Map<String, Object>) changes.get(0).get("value");
+                    return value != null && value.containsKey("statuses");
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error checking if payload is status update", e);
+        }
+        return false;
+    }
+
+    /**
+     * Processes status updates from the webhook payload.
+     * Extracts and logs message status information like delivery and read receipts.
+     *
+     * @param payload The webhook payload containing status updates
+     */
+    private void handleStatusUpdate(Map<String, Object> payload) {
+        try {
+            List<Map<String, Object>> statuses = extractStatuses(payload);
+            if (statuses != null) {
+                statuses.forEach(status -> {
+                    String statusType = (String) status.get("status");
+                    String messageId = (String) status.get("id");
+                    logger.info("Message status update - ID: {}, Status: {}", messageId, statusType);
+                });
+            }
+        } catch (Exception e) {
+            logger.error("Error handling status update", e);
+        }
+    }
+
+    /**
+     * Extracts messages from the webhook payload.
+     * Navigates through the payload structure to find and return the messages array.
+     *
+     * @param payload The webhook payload to process
+     * @return List of message objects, or empty list if none found
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> extractMessages(Map<String, Object> payload) {
+        try {
+            List<Map<String, Object>> entries = (List<Map<String, Object>>) payload.get("entry");
+            if (entries != null && !entries.isEmpty()) {
+                Map<String, Object> entry = entries.get(0);
+                List<Map<String, Object>> changes = (List<Map<String, Object>>) entry.get("changes");
+                if (changes != null && !changes.isEmpty()) {
+                    Map<String, Object> value = (Map<String, Object>) changes.get(0).get("value");
+                    return (List<Map<String, Object>>) value.get("messages");
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error extracting messages from payload", e);
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * Extracts status updates from the webhook payload.
+     * Similar to extractMessages but specifically for status information.
+     *
+     * @param payload The webhook payload to process
+     * @return List of status update objects, or empty list if none found
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> extractStatuses(Map<String, Object> payload) {
+        try {
+            List<Map<String, Object>> entries = (List<Map<String, Object>>) payload.get("entry");
+            if (entries != null && !entries.isEmpty()) {
+                Map<String, Object> entry = entries.get(0);
+                List<Map<String, Object>> changes = (List<Map<String, Object>>) entry.get("changes");
+                if (changes != null && !changes.isEmpty()) {
+                    Map<String, Object> value = (Map<String, Object>) changes.get(0).get("value");
+                    return (List<Map<String, Object>>) value.get("statuses");
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error extracting statuses from payload", e);
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * Extracts and formats the sender's phone number from a message.
+     * Ensures the phone number is properly formatted with a '+' prefix.
+     *
+     * @param message The message object containing sender information
+     * @return Formatted phone number or null if not found/invalid
+     */
+    private String extractPhoneNumber(Map<String, Object> message) {
+        try {
+            String phoneNumber = (String) message.get("from");
+            if (phoneNumber != null) {
+                phoneNumber = phoneNumber.replaceAll("[^0-9+]", "");
+                if (!phoneNumber.startsWith("+")) {
+                    phoneNumber = "+" + phoneNumber;
+                }
+                return phoneNumber;
+            }
+        } catch (Exception e) {
+            logger.error("Error extracting phone number", e);
+        }
+        return null;
+    }
+
+    /**
+     * Extracts the WhatsApp phone number ID from the webhook payload.
+     * This ID is used for sending responses back to WhatsApp.
+     *
+     * @param payload The webhook payload containing metadata
+     * @return WhatsApp phone number ID or null if not found
+     */
+    @SuppressWarnings("unchecked")
+    private String extractPhoneNumberId(Map<String, Object> payload) {
+        try {
+            List<Map<String, Object>> entries = (List<Map<String, Object>>) payload.get("entry");
+            if (entries != null && !entries.isEmpty()) {
+                Map<String, Object> entry = entries.get(0);
+                List<Map<String, Object>> changes = (List<Map<String, Object>>) entry.get("changes");
+                if (changes != null && !changes.isEmpty()) {
+                    Map<String, Object> value = (Map<String, Object>) changes.get(0).get("value");
+                    return (String) ((Map<String, Object>) value.get("metadata")).get("phone_number_id");
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error extracting phone number ID", e);
+        }
+        return null;
     }
 }

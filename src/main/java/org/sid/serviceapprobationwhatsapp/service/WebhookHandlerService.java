@@ -5,6 +5,12 @@ import java.util.Map;
 
 public interface WebhookHandlerService {
 
+    void processWebhookPayload(Map<String, Object> payload);
+
+    void processSingleMessage(Map<String, Object> message, Map<String, Object> payload);
+
+    void markMessageAsRead(String phoneNumberId, String messageId);
+
     void handleButtonMessage(Map<String, Object> message, String phoneNumber) throws IOException;
 
     void processButtonAction(String buttonPayload, String phoneNumber, String approvalId) throws IOException;
